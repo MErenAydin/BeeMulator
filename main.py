@@ -10,9 +10,10 @@ import copy
 class Bee():
 
 	WANDERING = 0
-	COLLECTING = 1
-	RETURNING = 2
-	DEPOSIT = 3
+	TO_FOOD = 1
+	COLLECTING = 2
+	RETURNING = 3
+	DEPOSIT = 4
 
 	def __init__(self, hive, position = None, isQueen = False):
 		self.hive = hive
@@ -30,7 +31,7 @@ class Bee():
 		self.state = Bee.WANDERING
 		self.attachedFlower = None
 		self.attachTime = 0
-		self.collectingTime = 5
+		self.collectingTime = 1
 
 	def Render(self, game):
 		if self.isQueen:
@@ -51,13 +52,17 @@ class Bee():
 		if self.state == Bee.WANDERING:
 			flower, distance = self.ClosestFlower(game)
 			if flower is not None:
-				if distance < flower.size:
-					self.attachedFlower = flower
-					self.state = Bee.COLLECTING
-					self.attachTime = pygame.time.get_ticks()
+				self.state = Bee.TO_FOOD
+				self.attachedFlower = flower
 				self.direction = (flower.position - self.position).normalized()
 			else:
 				self.direction = (self.direction + Vec2(random.random() * 2 - 1, random.random() * 2 - 1) * self.wanderStrength).normalized()
+
+		elif self.state == Bee.TO_FOOD:
+			self.direction = (self.attachedFlower.position - self.position).normalized()
+			if (self.attachedFlower.position - self.position).magnitude < self.attachedFlower.size:
+				self.state = Bee.COLLECTING
+				self.attachTime = pygame.time.get_ticks()
 
 		elif self.state == Bee.COLLECTING:
 			delta = (pygame.time.get_ticks() - self.attachTime) / 1000
@@ -77,11 +82,12 @@ class Bee():
 			delta = (pygame.time.get_ticks() - self.attachTime) / 1000
 			if delta > self.collectingTime:
 				self.state = Bee.WANDERING
+				self.hive.honey += 1
 		else:
 			pass
 		
 		screenSize = game.screen.get_size()
-		if self.state == self.WANDERING or self.state == self.RETURNING:
+		if self.state == self.WANDERING or self.state == self.RETURNING or self.state == Bee.TO_FOOD:
 			if self.position.x < 0:
 				self.position.x = 0
 				self.direction.x = -self.direction.x
@@ -94,6 +100,7 @@ class Bee():
 			elif self.position.y > screenSize[1]:
 				self.position.y = screenSize[1]
 				self.direction.y = -self.direction.y
+
 			desiredVelocity = self.direction *  self.maxSpeed
 			desiredSteeringForce = (desiredVelocity - self.velocity) * self.steerStrength
 			acceleration = Vec2.clamp_magnitude(desiredSteeringForce, self.steerStrength)
@@ -129,6 +136,8 @@ class Hive():
 		self.position = pos
 		self.rect = Rect(self.position.x - 50, self.position.y - 50, 100, 100)
 		self.bees = None
+		self.honey = 0
+		self.font = pygame.font.SysFont(None, 24)
 
 	def PopulateHive(self, beeAmount):
 		self.bees = []
@@ -141,6 +150,9 @@ class Hive():
 	def Render(self, game):
 		color = [255, 255, 255]
 		pygame.draw.rect(game.screen, color, self.rect, 2)
+		text = self.font.render(str(self.honey), True, [255,255,255])
+		text_rect = text.get_rect()
+		game.screen.blit(text, (self.position.x - text_rect.width / 2, self.position.y - text_rect.height / 2))
 		for bee in self.bees:
 			bee.Render(game)
 
