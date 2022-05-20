@@ -57,6 +57,7 @@ class Bee():
 					if  self.hive.knownFood[randomFood[0]] > 0:
 						self.state = Bee.TO_FOOD
 						self.attachedFlower = randomFood[0]
+
 			flower, distance = self.ClosestFlower(game)
 			if flower is not None:
 				self.state = Bee.TO_FOOD
@@ -228,6 +229,8 @@ class Game():
 		self.bestdepth = pygame.display.mode_ok(self.screenRect.size, self.winstyle)
 		self.screen = pygame.display.set_mode(self.screenRect.size, self.winstyle)
 		self._getTicksLastFrame = 0.0
+		self.clock = pygame.time.Clock()
+		self.font = pygame.font.SysFont(None, 24)
 
 	def UpdateDisplay(self):
 		if self.drawMode == Game.DRAW_MODE_DEBUG:
@@ -244,9 +247,13 @@ class Game():
 			for flower in self.flowers:
 				flower.Render(self)
 
+		self.clock.tick(30)
+
+		text = self.font.render(str(int(self.clock.get_fps())), True, [255,255,255])
+		self.screen.blit(text, (10, 10))
+
 		pygame.display.flip()
-		clock = pygame.time.Clock()
-		clock.tick(30)
+
 		t = pygame.time.get_ticks()
 		Game.DELTA_TIME = (t - self._getTicksLastFrame) / 1000.0
 		self._getTicksLastFrame = t
@@ -279,7 +286,7 @@ def main():
 	for i in range(1):
 		hive = Hive(Vec2(640 * (i + 1), 500))
 		
-		hive.PopulateHive(400)
+		hive.PopulateHive(1000)
 		game.hives.append(hive)
 
 
