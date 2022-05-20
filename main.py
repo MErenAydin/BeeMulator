@@ -32,6 +32,7 @@ class Bee():
 		self.attachedFlower = None
 		self.attachTime = 0
 		self.collectingTime = 1
+		self.lastFlowercollectCount = 0
 
 	def Render(self, game):
 		if self.isQueen:
@@ -50,6 +51,12 @@ class Bee():
 
 	def Move(self,game):
 		if self.state == Bee.WANDERING:
+			if self.hive.rect.collidepoint(self.position.x, self.position.y):
+				if len(self.hive.knownFood) > 0:
+					randomFood = random.sample( self.hive.knownFood.items(), 1)[0]
+					if  self.hive.knownFood[randomFood[0]] > 0:
+						self.state = Bee.TO_FOOD
+						self.attachedFlower = randomFood[0]
 			flower, distance = self.ClosestFlower(game)
 			if flower is not None:
 				self.state = Bee.TO_FOOD
@@ -68,9 +75,11 @@ class Bee():
 			delta = (pygame.time.get_ticks() - self.attachTime) / 1000
 			if self.attachedFlower.collectCount <= 0:
 				self.state = Bee.WANDERING
+				return
 			if delta > self.collectingTime:
 				self.state = Bee.RETURNING
 				self.attachedFlower.collectCount -= 1
+				self.lastFlowercollectCount = self.attachedFlower.collectCount
 
 		elif self.state == Bee.RETURNING:
 			self.direction = (self.hive.position - self.position).normalized()
@@ -81,8 +90,22 @@ class Bee():
 		elif self.state == Bee.DEPOSIT:
 			delta = (pygame.time.get_ticks() - self.attachTime) / 1000
 			if delta > self.collectingTime:
-				self.state = Bee.WANDERING
 				self.hive.honey += 1
+				if self.attachedFlower in self.hive.knownFood.keys():
+					self.hive.knownFood[self.attachedFlower] = self.lastFlowercollectCount if self.hive.knownFood[self.attachedFlower] > self.lastFlowercollectCount else self.hive.knownFood[self.attachedFlower]
+				else:
+					self.hive.knownFood[self.attachedFlower] = self.lastFlowercollectCount
+ 
+				if len(self.hive.knownFood) > 0:
+					randomFood = random.sample( self.hive.knownFood.items(), 1 )[0]
+					if  self.hive.knownFood[randomFood[0]] > 0:
+						self.attachedFlower = randomFood[0]
+						self.state = Bee.TO_FOOD
+					else:
+						self.state = Bee.WANDERING
+				else:
+					self.state = Bee.WANDERING
+
 		else:
 			pass
 		
@@ -138,6 +161,7 @@ class Hive():
 		self.bees = None
 		self.honey = 0
 		self.font = pygame.font.SysFont(None, 24)
+		self.knownFood = {}
 
 	def PopulateHive(self, beeAmount):
 		self.bees = []
@@ -159,7 +183,7 @@ class Hive():
 class Flower():
 	def __init__(self, pos):
 		self.position = pos
-		self.collectCount = 5
+		self.collectCount = 50
 		self.refillTime = 10
 		self.size = 12
 
@@ -252,10 +276,10 @@ def main():
 	game.Start("BeeMulator", is_fullscreen = False, draw_mode= Game.DRAW_MODE_NORMAL)
 
 	game.hives = []
-	for i in range(2):
-		hive = Hive(Vec2(500 * (i + 1), 500))
+	for i in range(1):
+		hive = Hive(Vec2(640 * (i + 1), 500))
 		
-		hive.PopulateHive(100)
+		hive.PopulateHive(400)
 		game.hives.append(hive)
 
 
