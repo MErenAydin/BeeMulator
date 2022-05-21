@@ -1,18 +1,20 @@
-
+import numpy as np
+import math
 class Vec2():
 	def __init__(self, x = 0.0, y = 0.0):
 		self.__x = x
 		self.__y = y
-		self.magnitude = self.get_magnitude()
+		self.__magnitude = 0
+		self.__magnitudeChanged = True
 	
 	def normalized(self):
 		if self.magnitude > 0:
 			return Vec2(self.x / self.magnitude, self.y / self.magnitude)
 		else:
 			return Vec2()
-
-	def get_magnitude(self):
-		return (self.__x ** 2 + self.__y ** 2) ** 0.5
+	
+	def get_magnitude2(self):
+		return self.x * self.x + self.y * self.y
 
 	@staticmethod
 	def clamp_magnitude(vector, clamp):
@@ -52,13 +54,20 @@ class Vec2():
 			self.y *= other
 		return self
 
-	def set_x(self, value):
+	def _set_x(self, value):
 		self.__x = value
-		self.magnitude = self.get_magnitude()
+		self.__magnitudeChanged = True
 	
-	def set_y(self, value):
+	def _set_y(self, value):
 		self.__y = value
-		self.magnitude = self.get_magnitude()
+		self.__magnitudeChanged = True
 
-	x = property(lambda self: self.__x, set_x)
-	y = property(lambda self: self.__y, set_y)
+	def _get_magnitude(self):
+		if self.__magnitudeChanged:
+			self.__magnitude = math.sqrt(self.x * self.x + self.y * self.y)
+			self.__magnitudeChanged = False
+		return self.__magnitude
+
+	x = property(lambda self: self.__x, _set_x)
+	y = property(lambda self: self.__y, _set_y)
+	magnitude = property(_get_magnitude, lambda self: None)
