@@ -221,6 +221,9 @@ class Hive():
 		self.honey = 0
 		self.font = pygame.font.SysFont(None, 24)
 		self.knownFood = {}
+		self.combs = []
+
+		self.combs.append(Honeycomb(0))
 		#self.beesInside = 0
 
 	def PopulateHive(self, game, beeAmount, maxBeeAmount = 1000):
@@ -235,13 +238,85 @@ class Hive():
 
 	def Render(self, game):
 		color = [255, 255, 255]
-		pygame.draw.rect(game.screen, color, self.rect, 2)
-		text = self.font.render(str(self.honey), True, [255,255,255])
-		text_rect = text.get_rect()
-		game.screen.blit(text, (self.position.x - text_rect.width / 2, self.position.y - text_rect.height / 2))
-		for bee in self.bees:
-			bee.Render(game)
+		if game.state == Game.DISPLAY_WORLD:
+			pygame.draw.rect(game.screen, color, self.rect, 2)
+			text = self.font.render(str(self.honey), True, [255,255,255])
+			text_rect = text.get_rect()
+			game.screen.blit(text, (self.position.x - text_rect.width / 2, self.position.y - text_rect.height / 2))
+			for bee in self.bees:
+				bee.Render(game)
 
+		elif game.state == Game.DISPLAY_HIVE:
+			for comb in self.combs:
+				comb.Render(game)
+
+		elif game.state == Game.DISPLAY_COMB:
+			self.selectedComb.Render(game)
+
+		elif game.state == Game.DISPLAY_CELL:
+		 	self.selectedComb.selectedCell.Render(game)	
+
+class Honeycomb():
+	def __init__(self, index):
+		self.index = index
+		self.cells = []
+		self.cellRow = 40
+		self.cellColumn = 80
+		self.cellAmount = self.cellRow * self.cellColumn
+		self.larvaCellAmount = 0
+		self.honeyCellAmount = 0
+		self.BuildHoneycomb()
+
+		screenSize = pygame.display.get_window_size()
+		combProportion = 0.06
+		combwidth = screenSize[0] * combProportion
+		margin = screenSize[0] * (1 - (combProportion * 10)) / (10 + 1)
+		self.rect = Rect(margin * (self.index + 1) + combwidth * self.index, 10 , combwidth, screenSize[1] - 10)
+		#self.cellPolygons = 
+
+	def Render(self, game):
+		if game.state == Game.DISPLAY_HIVE:
+			pygame.draw.rect(game.screen, [255,255,255], self.rect, 2)
+		if game.state == Game.DISPLAY_COMB:
+			for cell in self.cells:
+				cell.Render(game)
+		if game.state == Game.DISPLAY_CELL:
+			self.selectedCell.Render(game)
+
+	def BuildHoneycomb(self):	
+		diameter = (pygame.display.get_window_size()[0] - 100)/ self.cellColumn
+		for i in range(self.cellColumn):
+			for j in range(self.cellRow):
+				cell = Cell()
+				if j % 2  == 0:
+					cell.rect = Rect( 50 + i * diameter, 50 + j * 0.75 * diameter , diameter, diameter)
+				else:
+					cell.rect = Rect( 50 + i * diameter + diameter / 2, 50 + j * 0.75 * diameter, diameter, diameter)
+				cell.index = Vec2(i, j)
+				cell.diameter = diameter - 1
+				self.cells.append(cell)				
+
+class Cell():
+	EMPTY_CELL = 0
+	HONEY_CELL = 1
+	LARVA_CELL = 2
+	def __init__(self):
+		self.position = Vec2()
+		self.index = Vec2()
+		self.rect = Rect(0,0,0,0)
+		self.capacity = 100
+		self.state = Cell.EMPTY_CELL
+		self.color = [75, 45, 20]
+		self.diameter = 0
+
+	def Render(self, game):
+		if game.state == Game.DISPLAY_COMB:
+			pygame.draw.circle(game.screen, self.color, self.rect.center, self.diameter / 2 )
+		elif game.state == Game.DISPLAY_CELL:
+			text = game.font.render(f"{self.index.x}, {self.index.y}", True, [255,255,255])
+			text_rect = text.get_rect()
+			game.screen.blit(text, (self.rect.centerx - text_rect.width / 2, self.rect.centery - text_rect.height / 2))
+		
 class Flower():
 	SPECIE_RED = 0
 	SPECIE_GREEN = 1
@@ -289,11 +364,18 @@ class Flower():
 class Game():
 	DRAW_MODE_NORMAL = 0
 	DRAW_MODE_DEBUG = 1
+
+	DISPLAY_WORLD = 0
+	DISPLAY_HIVE = 1
+	DISPLAY_COMB = 2
+	DISPLAY_CELL = 3
+
 	DELTA_TIME = 0
 	
 	def __init__(self):
 		self.hives = []
 		self.flowers = []
+		self.buttons = []
 
 	def Start(self, NAME, width = 1280, height = 720, is_fullscreen = False, draw_mode = DRAW_MODE_NORMAL):
 		pygame.init()
@@ -321,6 +403,11 @@ class Game():
 		self.time = 0
 		self.day = 1
 		self.timeMultiplier = 1
+		self.state = Game.DISPLAY_WORLD
+
+		self.backButton = Button(Rect(100,100, 100,50), "Back")
+		self.backButton.visible = False
+		self.buttons.append(self.backButton)
 		#self.flowers = Flower.RandomlyLocate(self, 100)
 
 
@@ -335,9 +422,13 @@ class Game():
 			for hive in self.hives:
 				hive.Render(self)
 
-		if len(self.flowers) > 0:
-			for flower in self.flowers:
-				flower.Render(self)
+		if self.state == Game.DISPLAY_WORLD:
+			if len(self.flowers) > 0:
+				for flower in self.flowers:
+					flower.Render(self)
+
+		for button in self.buttons:
+			button.Render(self)
 
 		self.clock.tick(30)
 
@@ -349,15 +440,10 @@ class Game():
 		
 		Game.DELTA_TIME =  (t - self._getTicksLastFrame) /  1000.0
 		self._getTicksLastFrame = t
+		
+		self.Display_stats()
 
-		text = self.font.render(f"Fps: {int(self.clock.get_fps())}", True, [255,255,255])
-		self.screen.blit(text, (10, 10))
-		text = self.font.render(str(f"Time: {self.time:02}.00"), True, [255,255,255])
-		self.screen.blit(text, (110, 10))
-		text = self.font.render(str(f"Day: {self.day}"), True, [255,255,255])
-		self.screen.blit(text, (210, 10))
-		text = self.font.render(str(f"Speed: {self.timeMultiplier:.2f}X"), True, [255,255,255])
-		self.screen.blit(text, (310, 10))
+		
 		pygame.display.flip()	
     
 	def Update(self):
@@ -368,7 +454,39 @@ class Game():
 			if event.type == pygame.MOUSEBUTTONDOWN:
 				pos = event.pos
 				button = event.button
-				if button > 0 and button < 4:
+				if button == 1:
+					#if any([btn.rect.collidepoint(pos[0], pos[1]) for btn in self.buttons]):
+					if self.state == Game.DISPLAY_WORLD:
+						for hive in self.hives:
+							if hive.rect.collidepoint(pos[0], pos[1]):
+								self.selectedHive = hive
+								self.state = Game.DISPLAY_HIVE
+								self.backButton.visible = True
+					elif self.state == Game.DISPLAY_HIVE:
+						if self.backButton.rect.collidepoint(pos[0], pos[1]):
+							self.state = Game.DISPLAY_WORLD
+							self.selectedHive = None
+							self.backButton.visible = False
+						else:
+							for comb in self.selectedHive.combs:
+								if comb.rect.collidepoint(pos[0], pos[1]):
+									self.selectedHive.selectedComb = comb
+									self.state = Game.DISPLAY_COMB
+					elif self.state == Game.DISPLAY_COMB:
+						if self.backButton.rect.collidepoint(pos[0], pos[1]):
+							self.state = Game.DISPLAY_HIVE
+							self.selectedHive.selectedComb = None
+						else:
+							for cell in self.selectedHive.selectedComb.cells:
+								if cell.rect.collidepoint(pos[0], pos[1]):
+									self.selectedHive.selectedComb.selectedCell = cell
+									self.state = Game.DISPLAY_CELL
+					elif self.state == Game.DISPLAY_CELL:
+						if self.backButton.rect.collidepoint(pos[0], pos[1]):
+							self.state = Game.DISPLAY_COMB
+							self.selectedHive.selectedComb.selectedCell = None
+
+				if button > 1 and button < 4 and self.state == Game.DISPLAY_WORLD:
 					self.flowers.append(Flower(Vec2(pos[0], pos[1]), button - 1))
 			
 			if event.type == pygame.MOUSEWHEEL:
@@ -382,12 +500,36 @@ class Game():
 
 		self.UpdateDisplay()
 
+	def Display_stats(self):
+		text = self.font.render(f"Fps: {int(self.clock.get_fps())}", True, [255,255,255])
+		self.screen.blit(text, (10, 10))
+		text = self.font.render(str(f"Time: {self.time:02}.00"), True, [255,255,255])
+		self.screen.blit(text, (110, 10))
+		text = self.font.render(str(f"Day: {self.day}"), True, [255,255,255])
+		self.screen.blit(text, (210, 10))
+		text = self.font.render(str(f"Speed: {self.timeMultiplier:.2f}X"), True, [255,255,255])
+		self.screen.blit(text, (310, 10))
+
 	def Shutdown(self):
 		pygame.quit()
 
+class Button():
+	def __init__(self, rect, text = "") -> None:
+		self.rect = rect
+		self.text = text
+		self.visible = True
+		self.command = None
+	
+	def Render(self, game):
+		if self.visible:
+			pygame.draw.rect(game.screen, [50,50,50], self.rect, border_radius = 5)
+			text = game.font.render(self.text, True, [255,255,255])
+			text_rect = text.get_rect()
+			game.screen.blit(text, (self.rect.centerx - text_rect.width / 2, self.rect.centery - text_rect.height / 2))
+
 def main():
 	game = Game()
-	game.Start("BeeMulator", is_fullscreen = False, draw_mode= Game.DRAW_MODE_NORMAL)
+	game.Start("BeeMulator", is_fullscreen = True, draw_mode= Game.DRAW_MODE_NORMAL)
 
 	game.hives = []
 	for i in range(1):
