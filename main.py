@@ -2,6 +2,7 @@
 import pygame
 from pygame.locals import *
 from vector import Vec2
+from collections import deque as queue
 
 import random
 import math
@@ -113,7 +114,7 @@ class Bee():
 				self.collectedFlowers.append(self.attachedFlower)
 				rand = random.random()
 				treshold = 0.95 if self.attachedFlower.specie in [specie for specie in self.collectedFlowers] else 0.99
-				if rand >= treshold:
+				if rand > treshold:
 					self.attachedFlower.Pollinate(game)
 				self.state = Bee.RETURNING if self.nectar >= self.capacity else Bee.WANDERING
 
@@ -127,6 +128,7 @@ class Bee():
 			delta = (pygame.time.get_ticks() - self.attachTime) / 1000
 			if delta > self.collectingTime:
 				self.hive.honey += self.nectar
+				self.hive.DepositNectar(self.nectar)
 				self.nectar = 0
 				for f in self.collectedFlowers:
 					f.isDiscovered = True
@@ -236,6 +238,14 @@ class Hive():
 			bee.position = Vec2(self.rect.centerx, self.rect.centery)
 			self.bees.append(bee)
 
+	def DepositNectar(self, nectarAmount):
+		if nectarAmount > 0:
+			for comb in self.combs:
+				if comb.usage < 0.6:
+					comb.DepositNectar(nectarAmount)
+					break
+		# implement distribution logic
+
 	def Render(self, game):
 		color = [255, 255, 255]
 		if game.state == Game.DISPLAY_WORLD:
@@ -265,6 +275,7 @@ class Honeycomb():
 		self.cellAmount = self.cellRow * self.cellColumn
 		self.larvaCellAmount = 0
 		self.honeyCellAmount = 0
+		self.usage = 0
 		self.BuildHoneycomb()
 
 		screenSize = pygame.display.get_window_size()
@@ -274,6 +285,58 @@ class Honeycomb():
 		self.rect = Rect(margin * (self.index + 1) + combwidth * self.index, 10 , combwidth, screenSize[1] - 10)
 		#self.cellPolygons = 
 
+	def DepositNectar(self, nectarAmount):
+		if self.honeyCellAmount == 0:
+			self.baseCol = random.randint(25,55)
+			self.baseRow = random.randint(10,20)
+			cell = self.cells[self.cellColumn * (self.baseRow - 1) + self.baseCol]
+			cell.state = Cell.HONEY_CELL
+			cell.nectar += nectarAmount
+			self.honeyCellAmount += 1
+		
+		else:
+			visited = [[ False for i in range(self.cellColumn)] for i in range(self.cellRow)]
+			cell = self.BFS(self.baseCol, self.baseRow, visited)
+			cell.state = Cell.HONEY_CELL
+			cell.nectar += nectarAmount
+			self.honeyCellAmount += 1
+	
+	def isValid(self, vis, row, col):
+		if (row < 0 or col < 0 or row >= self.cellRow or col >= self.cellColumn):
+			return False
+		if (vis[row][col]):
+			return False
+		return True
+	
+	def BFS(self, col, row, visited):
+		dRow = [ -1, 0, 1, 0]
+		dCol = [ 0, 1, 0, -1]
+
+		q = queue()
+		q.append(( row, col , None))
+		visited[row][col] = True
+	
+		while (len(q) > 0):
+			node = q.popleft()
+			x = node[0]
+			y = node[1]
+			last = node[2]
+			cell = self.cells[(x - 1) * self.cellColumn + y]
+			if cell.state == Cell.HONEY_CELL:
+				if last is not None:
+					#if cell.nectar < last.nectar:
+					#	return cell
+					if cell.nectar >= last.nectar and last.nectar <= last.capacity - 10:
+						return last
+			if cell.state == Cell.EMPTY_CELL:
+				return cell
+			for i in range(4):
+				adjx = x + dRow[i]
+				adjy = y + dCol[i]
+				if (self.isValid(visited, adjx, adjy)):
+					q.append((adjx, adjy, cell))
+					visited[adjx][adjy] = True
+	
 	def Render(self, game):
 		if game.state == Game.DISPLAY_HIVE:
 			pygame.draw.rect(game.screen, [255,255,255], self.rect, 2)
@@ -285,14 +348,14 @@ class Honeycomb():
 
 	def BuildHoneycomb(self):	
 		diameter = (pygame.display.get_window_size()[0] - 100)/ self.cellColumn
-		for i in range(self.cellColumn):
-			for j in range(self.cellRow):
+		for i in range(self.cellRow):
+			for j in range(self.cellColumn):
 				cell = Cell()
-				if j % 2  == 0:
-					cell.rect = Rect( 50 + i * diameter, 50 + j * 0.75 * diameter , diameter, diameter)
+				if i % 2  == 0:
+					cell.rect = Rect( 50 + j * diameter, 50 + i * 0.75 * diameter , diameter, diameter)
 				else:
-					cell.rect = Rect( 50 + i * diameter + diameter / 2, 50 + j * 0.75 * diameter, diameter, diameter)
-				cell.index = Vec2(i, j)
+					cell.rect = Rect( 50 + j * diameter + diameter / 2, 50 + i * 0.75 * diameter, diameter, diameter)
+				cell.index = Vec2(j, i)
 				cell.diameter = diameter - 1
 				self.cells.append(cell)				
 
@@ -305,7 +368,8 @@ class Cell():
 		self.index = Vec2()
 		self.rect = Rect(0,0,0,0)
 		self.capacity = 100
-		self.state = Cell.EMPTY_CELL
+		self.nectar = 0
+		self.__state = Cell.EMPTY_CELL
 		self.color = [75, 45, 20]
 		self.diameter = 0
 
@@ -313,10 +377,20 @@ class Cell():
 		if game.state == Game.DISPLAY_COMB:
 			pygame.draw.circle(game.screen, self.color, self.rect.center, self.diameter / 2 )
 		elif game.state == Game.DISPLAY_CELL:
-			text = game.font.render(f"{self.index.x}, {self.index.y}", True, [255,255,255])
+			text = game.font.render(f"{self.index.x}, {self.index.y}\n{self.nectar}", True, [255,255,255])
 			text_rect = text.get_rect()
 			game.screen.blit(text, (self.rect.centerx - text_rect.width / 2, self.rect.centery - text_rect.height / 2))
 		
+	def _set_state (self, value):
+		self.__state = value
+		if value == Cell.LARVA_CELL:
+			self.color = [140, 75, 30]
+		elif value == Cell.HONEY_CELL:
+			self.color = [200, 200, 0]
+		else:
+			self.color = [75, 45, 20]
+	state = property(lambda self: self.__state, _set_state)
+
 class Flower():
 	SPECIE_RED = 0
 	SPECIE_GREEN = 1
@@ -529,13 +603,13 @@ class Button():
 
 def main():
 	game = Game()
-	game.Start("BeeMulator", is_fullscreen = True, draw_mode= Game.DRAW_MODE_NORMAL)
+	game.Start("BeeMulator", is_fullscreen = False, draw_mode= Game.DRAW_MODE_NORMAL)
 
 	game.hives = []
 	for i in range(1):
 		hive = Hive(Vec2(640 * (i + 1), 500))
 		
-		hive.PopulateHive(game, 100)
+		hive.PopulateHive(game, 1000)
 		game.hives.append(hive)
 
 
