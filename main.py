@@ -3,217 +3,12 @@ import pygame
 from pygame.locals import *
 from vector import Vec2
 from collections import deque as queue
+from bee import Bee
+from enums import *
 
 import random
 import math
 import copy
-
-class Bee():
-
-	# Moving states
-	WANDERING = 0
-	TO_FOOD = 1
-	COLLECTING = 2
-	RETURNING = 3
-	DEPOSIT = 4
-	SLEEP = 5
-
-	# Lifecycle states
-	LARVA = 0
-	FEEDER = 1
-	BUILDER = 2
-	SCOUT = 3
-	COLLECTER = 4
-
-
-	def __init__(self, hive, position = None):
-		self.hive = hive
-		self.position = Vec2() if position is None else position
-		self.direction = Vec2()
-		self.__velocity = Vec2()
-		self.trace = []
-		self.traceLength = 50
-		self.maxSpeed = 2
-		self.steerStrength = 1.2
-		self.wanderStrength = 0.4
-		self.visionRange = 50
-		self.attachedFlower = None
-		self.attachTime = 0
-		self.collectingTime = 1
-
-	def Hatch(self, game, isQueen = False):
-		if game.drawMode == Game.DRAW_MODE_NORMAL:
-			self.trace = None
-		self.isQueen = isQueen
-		self.lastFlowercollectCount = 0
-		self.bornday = game.day
-		self.state = Bee.WANDERING
-		self.lifespan = 35
-		self.deathHour = random.randint(0,23)
-		self.nectar = 0
-		self.capacity = 10
-		self.collectedFlowers = []
-
-	def Kill(self, game):
-		if game.time == self.deathHour:
-			self.hive.bees.remove(self) 
-
-	def Render(self, game):
-		if self.isQueen:
-			size = 4
-			color = [100, 100, 0]
-		else:
-			size = 2
-			color = [255, 255, 0]
-		screenX = self.position.x
-		screenY = self.position.y
-		if game.drawMode == Game.DRAW_MODE_DEBUG:
-			pygame.draw.circle(game.screen, [255,0,0], [screenX,screenY], self.visionRange , 1)
-			for t in self.trace:
-				pygame.draw.circle(game.screen, [155, 155, 0], [t.x,t.y], 1)
-		pygame.draw.circle(game.screen, color, [screenX,screenY], size)
-
-	def Move(self,game):
-		if self.state == Bee.WANDERING:
-			if game.time < 5 or game.time > 19:
-				self.state = Bee.RETURNING
-			if self.hive.rect.collidepoint(self.position.x, self.position.y):
-				if len(self.hive.knownFood) > 0:
-					randomFood = random.sample( self.hive.knownFood.items(), 1)[0]
-					if  self.hive.knownFood[randomFood[0]] > 0:
-						self.state = Bee.TO_FOOD
-						self.attachedFlower = randomFood[0]
-			
-
-			flower, _ = self.ClosestFlower(game)
-			if flower is not None:
-				self.state = Bee.TO_FOOD
-				self.attachedFlower = flower
-				self.direction = (flower.position - self.position).normalized()
-			else:
-				self.direction = (self.direction + Vec2(random.random() * 2 - 1, random.random() * 2 - 1) * self.wanderStrength).normalized()
-
-		elif self.state == Bee.TO_FOOD:
-			if game.time < 5 or game.time > 19:
-				self.state = Bee.RETURNING
-			else:
-				self.direction = (self.attachedFlower.position - self.position).normalized()
-				if (self.attachedFlower.position - self.position).magnitude < self.attachedFlower.size:
-					self.state = Bee.COLLECTING
-					self.attachTime = pygame.time.get_ticks()
-
-		elif self.state == Bee.COLLECTING:
-			if self.attachedFlower.collectCount <= 0:
-				self.state = Bee.WANDERING
-				return
-			delta = (pygame.time.get_ticks() - self.attachTime) / 1000
-			if delta > self.collectingTime:
-				self.attachedFlower.collectCount -= 1
-				self.nectar += 1
-				self.lastFlowercollectCount = self.attachedFlower.collectCount
-				self.collectedFlowers.append(self.attachedFlower)
-				rand = random.random()
-				treshold = 0.95 if self.attachedFlower.specie in [specie for specie in self.collectedFlowers] else 0.99
-				if rand > treshold:
-					self.attachedFlower.Pollinate(game)
-				self.state = Bee.RETURNING if self.nectar >= self.capacity else Bee.WANDERING
-
-		elif self.state == Bee.RETURNING:
-			self.direction = (self.hive.position - self.position).normalized()
-			if self.hive.rect.collidepoint(self.position.x, self.position.y):
-				self.state = Bee.DEPOSIT
-				self.attachTime = pygame.time.get_ticks()
-
-		elif self.state == Bee.DEPOSIT:
-			delta = (pygame.time.get_ticks() - self.attachTime) / 1000
-			if delta > self.collectingTime:
-				self.hive.honey += self.nectar
-				self.hive.DepositNectar(self.nectar)
-				self.nectar = 0
-				for f in self.collectedFlowers:
-					f.isDiscovered = True
-				self.collectedFlowers = []
-				if self.attachedFlower in self.hive.knownFood.keys():
-					self.hive.knownFood[self.attachedFlower] = self.lastFlowercollectCount if self.hive.knownFood[self.attachedFlower] > self.lastFlowercollectCount else self.hive.knownFood[self.attachedFlower]
-				else:
-					self.hive.knownFood[self.attachedFlower] = self.lastFlowercollectCount
-
-
-				if game.time >= 5 and game.time <= 19:
-					if len(self.hive.knownFood) > 0:
-						randomFood = random.sample( self.hive.knownFood.items(), 1 )[0]
-						if  self.hive.knownFood[randomFood[0]] > 0:
-							self.attachedFlower = randomFood[0]
-							self.state = Bee.TO_FOOD
-						else: 
-							self.state = Bee.WANDERING
-					else:
-						self.state = Bee.WANDERING
-				else:
-					self.state = Bee.SLEEP
-		
-		elif self.state == Bee.SLEEP:
-			if game.time >= 5 and game.time <= 19:
-				if len(self.hive.knownFood) > 0:
-					randomFood = random.sample( self.hive.knownFood.items(), 1 )[0]
-					if  self.hive.knownFood[randomFood[0]] > 0:
-						self.attachedFlower = randomFood[0]
-						self.state = Bee.TO_FOOD
-					else: 
-						self.state = Bee.WANDERING
-
-		else:
-			pass
-		
-		screenSize = game.screen.get_size()
-		if self.state == self.WANDERING or self.state == self.RETURNING or self.state == Bee.TO_FOOD:
-			if self.position.x < 0:
-				self.position.x = 1
-				self.direction.x = -self.direction.x
-			elif self.position.x > screenSize[0]:
-				self.position.x = screenSize[0] - 1
-				self.direction.x = -self.direction.x
-			if self.position.y < 0:
-				self.position.y = 1
-				self.direction.y = -self.direction.y
-			elif self.position.y > screenSize[1]:
-				self.position.y = screenSize[1] - 1
-				self.direction.y = -self.direction.y
-
-			desiredVelocity = self.direction *  self.maxSpeed
-			desiredSteeringForce = (desiredVelocity - self.velocity) * self.steerStrength
-			acceleration = Vec2.clamp_magnitude(desiredSteeringForce, self.steerStrength)
-
-			#if self.position.x < self.hive.rect.right and self.position.x > self.hive.rect.left \
-			#	and self.position.y < self.hive.rect.bottom and self.position.y > self.hive.rect.top:
-			self.velocity = Vec2.clamp_magnitude((self.velocity + acceleration * Game.DELTA_TIME), self.maxSpeed)
-			self.position += self.velocity * Game.DELTA_TIME
-			#angle = math.degrees(math.atan2(self.velocity.x, self.velocity.y))
-
-	def Update(self, game):
-		self.Move(game)
-		if game.day - self.bornday >= self.lifespan:
-			self.Kill(game)
-
-	def ClosestFlower(self, game):
-		#flowers = [a for a in game.flowers if a.collectCount > 0]
-		for flower in game.flowers:
-			if flower.collectCount <= 0 or flower in self.collectedFlowers:
-				continue
-			distance2 = (self.position - flower.position).get_magnitude2()
-			if distance2 < self.visionRange * self.visionRange:
-				return flower, distance2
-		return None, None
-		
-	def _set_velocity(self, value):
-		self.__velocity = value
-		if self.trace is not None:
-			self.trace.append(copy.deepcopy(self.position))
-			if len(self.trace) > self.traceLength:
-				self.trace.pop(0)
-		self.position += value
-		
-	velocity = property(lambda self: self.__velocity, _set_velocity)
 
 class Hive():
 	def __init__(self, pos):
@@ -234,7 +29,7 @@ class Hive():
 		self.bees = []
 		for i in range(beeAmount):
 			bee = Bee(self)
-			bee.Hatch(game, True if i == beeAmount - 1 else False)
+			bee.Hatch(game)
 			bee.position = Vec2(self.rect.centerx, self.rect.centery)
 			self.bees.append(bee)
 
@@ -248,7 +43,7 @@ class Hive():
 
 	def Render(self, game):
 		color = [255, 255, 255]
-		if game.state == Game.DISPLAY_WORLD:
+		if game.state == DisplayState.DISPLAY_WORLD:
 			pygame.draw.rect(game.screen, color, self.rect, 2)
 			text = self.font.render(str(self.honey), True, [255,255,255])
 			text_rect = text.get_rect()
@@ -256,14 +51,14 @@ class Hive():
 			for bee in self.bees:
 				bee.Render(game)
 
-		elif game.state == Game.DISPLAY_HIVE:
+		elif game.state == DisplayState.DISPLAY_HIVE:
 			for comb in self.combs:
 				comb.Render(game)
 
-		elif game.state == Game.DISPLAY_COMB:
+		elif game.state == DisplayState.DISPLAY_COMB:
 			self.selectedComb.Render(game)
 
-		elif game.state == Game.DISPLAY_CELL:
+		elif game.state == DisplayState.DISPLAY_CELL:
 		 	self.selectedComb.selectedCell.Render(game)	
 
 class Honeycomb():
@@ -290,16 +85,17 @@ class Honeycomb():
 			self.baseCol = random.randint(25,55)
 			self.baseRow = random.randint(10,20)
 			cell = self.cells[self.cellColumn * (self.baseRow - 1) + self.baseCol]
-			cell.state = Cell.HONEY_CELL
-			cell.nectar += nectarAmount
 			self.honeyCellAmount += 1
 		
 		else:
-			visited = [[ False for i in range(self.cellColumn)] for i in range(self.cellRow)]
-			cell = self.BFS(self.baseCol, self.baseRow, visited)
-			cell.state = Cell.HONEY_CELL
+			cell = self.BFS(self.baseCol, self.baseRow, True)
+			if cell is not None and cell.state != CellType.HONEY_CELL:
+				self.honeyCellAmount += 1
+
+		if cell is not None:
+			cell.state = CellType.HONEY_CELL
 			cell.nectar += nectarAmount
-			self.honeyCellAmount += 1
+		
 	
 	def isValid(self, vis, row, col):
 		if (row < 0 or col < 0 or row >= self.cellRow or col >= self.cellColumn):
@@ -308,7 +104,8 @@ class Honeycomb():
 			return False
 		return True
 	
-	def BFS(self, col, row, visited):
+	def BFS(self, col, row, isHoney):
+		visited = [[ False for i in range(self.cellColumn)] for i in range(self.cellRow)]
 		dRow = [ -1, 0, 1, 0]
 		dCol = [ 0, 1, 0, -1]
 
@@ -322,13 +119,13 @@ class Honeycomb():
 			y = node[1]
 			last = node[2]
 			cell = self.cells[(x - 1) * self.cellColumn + y]
-			if cell.state == Cell.HONEY_CELL:
-				if last is not None:
+			if cell.state == CellType.HONEY_CELL:
+				if last is not None and isHoney:
 					#if cell.nectar < last.nectar:
 					#	return cell
 					if cell.nectar >= last.nectar and last.nectar <= last.capacity - 10:
 						return last
-			if cell.state == Cell.EMPTY_CELL:
+			if cell.state == CellType.EMPTY_CELL:
 				return cell
 			for i in range(4):
 				adjx = x + dRow[i]
@@ -338,12 +135,12 @@ class Honeycomb():
 					visited[adjx][adjy] = True
 	
 	def Render(self, game):
-		if game.state == Game.DISPLAY_HIVE:
+		if game.state == DisplayState.DISPLAY_HIVE:
 			pygame.draw.rect(game.screen, [255,255,255], self.rect, 2)
-		if game.state == Game.DISPLAY_COMB:
+		if game.state == DisplayState.DISPLAY_COMB:
 			for cell in self.cells:
 				cell.Render(game)
-		if game.state == Game.DISPLAY_CELL:
+		if game.state == DisplayState.DISPLAY_CELL:
 			self.selectedCell.Render(game)
 
 	def BuildHoneycomb(self):	
@@ -357,35 +154,52 @@ class Honeycomb():
 					cell.rect = Rect( 50 + j * diameter + diameter / 2, 50 + i * 0.75 * diameter, diameter, diameter)
 				cell.index = Vec2(j, i)
 				cell.diameter = diameter - 1
-				self.cells.append(cell)				
+				cell.state = CellType.LARVA_CELL
+				self.cells.append(cell)
 
 class Cell():
-	EMPTY_CELL = 0
-	HONEY_CELL = 1
-	LARVA_CELL = 2
 	def __init__(self):
 		self.position = Vec2()
 		self.index = Vec2()
 		self.rect = Rect(0,0,0,0)
 		self.capacity = 100
 		self.nectar = 0
-		self.__state = Cell.EMPTY_CELL
+		self.__state = CellType.EMPTY_CELL
 		self.color = [75, 45, 20]
 		self.diameter = 0
 
 	def Render(self, game):
-		if game.state == Game.DISPLAY_COMB:
+		if game.state == DisplayState.DISPLAY_COMB:
 			pygame.draw.circle(game.screen, self.color, self.rect.center, self.diameter / 2 )
-		elif game.state == Game.DISPLAY_CELL:
-			text = game.font.render(f"{self.index.x}, {self.index.y}\n{self.nectar}", True, [255,255,255])
-			text_rect = text.get_rect()
-			game.screen.blit(text, (self.rect.centerx - text_rect.width / 2, self.rect.centery - text_rect.height / 2))
+		elif game.state == DisplayState.DISPLAY_CELL:
+			size = game.screen.get_size()
+			proportionX = 0.35
+			rect = Rect(size[0] * proportionX, 100, size[0] * proportionX, size[1] - 200)
+			pygame.draw.rect(game.screen, [255, 255, 255], rect, 5)
+			if self.state == CellType.HONEY_CELL:
+				fill_amount = self.nectar / self.capacity
+				fill_rect = Rect(	rect.left + 5,
+									rect.top + rect.height - (rect.height * fill_amount),
+									rect.width - 10,
+									rect.height * fill_amount - 5)
+				pygame.draw.rect(game.screen, [255, 255, 0], fill_rect, 0)
+			elif self.state == CellType.LARVA_CELL:
+				#TODO: proportion will be arranged to growing
+				fill_amount = 0.5
+				fill_rect = Rect(	rect.left + rect.width / 2 - (rect.width * fill_amount) / 2 + 5,
+									rect.top + rect.height - (rect.height * fill_amount) + 5,
+									rect.width * fill_amount - 10,
+									rect.height * fill_amount - 10)
+				pygame.draw.ellipse(game.screen, [255, 255, 255], fill_rect)
+			#text = game.font.render(f"{self.index.x}, {self.index.y}\n{self.nectar}", True, [255,255,255])
+			#text_rect = text.get_rect()
+			#game.screen.blit(text, (self.rect.centerx - text_rect.width / 2, self.rect.centery - text_rect.height / 2))
 		
 	def _set_state (self, value):
 		self.__state = value
-		if value == Cell.LARVA_CELL:
+		if value == CellType.LARVA_CELL:
 			self.color = [140, 75, 30]
-		elif value == Cell.HONEY_CELL:
+		elif value == CellType.HONEY_CELL:
 			self.color = [200, 200, 0]
 		else:
 			self.color = [75, 45, 20]
@@ -438,13 +252,6 @@ class Flower():
 class Game():
 	DRAW_MODE_NORMAL = 0
 	DRAW_MODE_DEBUG = 1
-
-	DISPLAY_WORLD = 0
-	DISPLAY_HIVE = 1
-	DISPLAY_COMB = 2
-	DISPLAY_CELL = 3
-
-	DELTA_TIME = 0
 	
 	def __init__(self):
 		self.hives = []
@@ -477,7 +284,8 @@ class Game():
 		self.time = 0
 		self.day = 1
 		self.timeMultiplier = 1
-		self.state = Game.DISPLAY_WORLD
+		self.state = DisplayState.DISPLAY_WORLD
+		self.deltaTime = 0
 
 		self.backButton = Button(Rect(100,100, 100,50), "Back")
 		self.backButton.visible = False
@@ -496,7 +304,7 @@ class Game():
 			for hive in self.hives:
 				hive.Render(self)
 
-		if self.state == Game.DISPLAY_WORLD:
+		if self.state == DisplayState.DISPLAY_WORLD:
 			if len(self.flowers) > 0:
 				for flower in self.flowers:
 					flower.Render(self)
@@ -504,7 +312,7 @@ class Game():
 		for button in self.buttons:
 			button.Render(self)
 
-		self.clock.tick(30)
+		self.clock.tick()
 
 		t = pygame.time.get_ticks()
 		oldTime = self.time
@@ -512,7 +320,7 @@ class Game():
 		if oldTime - self.time == 23:
 			self.day += 1
 		
-		Game.DELTA_TIME =  (t - self._getTicksLastFrame) /  1000.0
+		self.deltaTime =  (t - self._getTicksLastFrame) /  1000.0
 		self._getTicksLastFrame = t
 		
 		self.Display_stats()
@@ -530,37 +338,37 @@ class Game():
 				button = event.button
 				if button == 1:
 					#if any([btn.rect.collidepoint(pos[0], pos[1]) for btn in self.buttons]):
-					if self.state == Game.DISPLAY_WORLD:
+					if self.state == DisplayState.DISPLAY_WORLD:
 						for hive in self.hives:
 							if hive.rect.collidepoint(pos[0], pos[1]):
 								self.selectedHive = hive
-								self.state = Game.DISPLAY_HIVE
+								self.state = DisplayState.DISPLAY_HIVE
 								self.backButton.visible = True
-					elif self.state == Game.DISPLAY_HIVE:
+					elif self.state == DisplayState.DISPLAY_HIVE:
 						if self.backButton.rect.collidepoint(pos[0], pos[1]):
-							self.state = Game.DISPLAY_WORLD
+							self.state = DisplayState.DISPLAY_WORLD
 							self.selectedHive = None
 							self.backButton.visible = False
 						else:
 							for comb in self.selectedHive.combs:
 								if comb.rect.collidepoint(pos[0], pos[1]):
 									self.selectedHive.selectedComb = comb
-									self.state = Game.DISPLAY_COMB
-					elif self.state == Game.DISPLAY_COMB:
+									self.state = DisplayState.DISPLAY_COMB
+					elif self.state == DisplayState.DISPLAY_COMB:
 						if self.backButton.rect.collidepoint(pos[0], pos[1]):
-							self.state = Game.DISPLAY_HIVE
+							self.state = DisplayState.DISPLAY_HIVE
 							self.selectedHive.selectedComb = None
 						else:
 							for cell in self.selectedHive.selectedComb.cells:
 								if cell.rect.collidepoint(pos[0], pos[1]):
 									self.selectedHive.selectedComb.selectedCell = cell
-									self.state = Game.DISPLAY_CELL
-					elif self.state == Game.DISPLAY_CELL:
+									self.state = DisplayState.DISPLAY_CELL
+					elif self.state == DisplayState.DISPLAY_CELL:
 						if self.backButton.rect.collidepoint(pos[0], pos[1]):
-							self.state = Game.DISPLAY_COMB
+							self.state = DisplayState.DISPLAY_COMB
 							self.selectedHive.selectedComb.selectedCell = None
 
-				if button > 1 and button < 4 and self.state == Game.DISPLAY_WORLD:
+				if button > 1 and button < 4 and self.state == DisplayState.DISPLAY_WORLD:
 					self.flowers.append(Flower(Vec2(pos[0], pos[1]), button - 1))
 			
 			if event.type == pygame.MOUSEWHEEL:
@@ -609,7 +417,7 @@ def main():
 	for i in range(1):
 		hive = Hive(Vec2(640 * (i + 1), 500))
 		
-		hive.PopulateHive(game, 1000)
+		hive.PopulateHive(game, 100)
 		game.hives.append(hive)
 
 
