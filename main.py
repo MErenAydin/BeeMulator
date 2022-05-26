@@ -235,8 +235,10 @@ class Flower():
 	
 	def Pollinate(self, game):
 		if not self.isPollinated:
-			randomPos = self.position + Vec2(random.randint(-50, 50), random.randint(-50, 50))
-			game.flowers.append(Flower(randomPos, self.specie))
+			randPosition = self.position + Vec2(random.randint(-50, 50), random.randint(-50, 50))
+			while any([hive.rect.inflate(10, 10).collidepoint(randPosition.x, randPosition.y) for hive in game.hives]):
+				randPosition = self.position + Vec2(random.randint(-50, 50), random.randint(-50, 50))
+			game.flowers.append(Flower(randPosition, self.specie))
 			self.isPollinated = True
 
 	@staticmethod
@@ -246,7 +248,7 @@ class Flower():
 		for _ in range(amount):
 			randSpecie = random.randint(0,2)
 			randPosition = Vec2(random.randint(10, w - 10), random.randint(10, h - 10))
-			while any([hive.rect.collidepoint(randPosition.x, randPosition.y) for hive in game.hives]):
+			while any([hive.rect.inflate(10, 10).collidepoint(randPosition.x, randPosition.y) for hive in game.hives]):
 				randPosition = Vec2(random.randint(10, w - 10), random.randint(10, h - 10))
 			ret.append(Flower(randPosition, randSpecie))
 		return ret
