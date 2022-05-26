@@ -1,4 +1,5 @@
 
+import argparse
 import pygame
 from pygame.locals import *
 from vector import Vec2
@@ -440,14 +441,20 @@ class Button():
 			game.screen.blit(text, (self.rect.centerx - text_rect.width / 2, self.rect.centery - text_rect.height / 2))
 
 def main():
+	ap = argparse.ArgumentParser()
+	ap.add_argument("-b", "--bees", type=int, default=100, help='Number of the bees in each hive')
+	ap.add_argument("-H", "--hives", type=int, default=1, help='Number of the hives in simulation')
+	args = vars(ap.parse_args())
+
 	game = Game()
 	game.Start("BeeMulator", is_fullscreen = False, draw_mode= Game.DRAW_MODE_NORMAL)
 
 	game.hives = []
-	for i in range(1):
-		hive = Hive(Vec2(640 * (i + 1), 500))
+	screenSize = game.screen.get_size() 
+	for i in range(args["hives"]):
+		hive = Hive(Vec2(screenSize[0] / (args["hives"] + 1) * (i + 1), screenSize[1] - 200))
 		
-		hive.PopulateHive(game, 100)
+		hive.PopulateHive(game, args["bees"])
 		game.hives.append(hive)
 
 
