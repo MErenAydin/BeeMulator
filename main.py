@@ -454,12 +454,20 @@ def main():
 	game.Start("BeeMulator", is_fullscreen = False, draw_mode= Game.DRAW_MODE_NORMAL)
 
 	game.hives = []
-	screenSize = game.screen.get_size() 
-	for i in range(args["hives"]):
-		hive = Hive(Vec2(screenSize[0] / (args["hives"] + 1) * (i + 1), screenSize[1] - 200))
-		
-		hive.PopulateHive(game, args["bees"])
-		game.hives.append(hive)
+	screenSize = game.screen.get_size()
+	rows = ((args["hives"] * 150 // screenSize[0])) + 1
+	cols = screenSize[0] //  150
+	for i in range(cols) if args["hives"] > cols else range(args["hives"]):
+		for j in range(rows):
+			if args["hives"] > cols:
+				xPos = screenSize[0] / cols * (i + 1) - 75
+			else:
+				xPos = screenSize[0] / (args["hives"] + 1) * (i + 1)
+			yPos = screenSize[1] - 150 * (j + 1) + 75
+			hive = Hive(Vec2(xPos, yPos))
+			
+			hive.PopulateHive(game, args["bees"])
+			game.hives.append(hive)
 
 	game.flowers = Flower.RandomlyLocate(game, 100)
 
