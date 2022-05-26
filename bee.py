@@ -147,16 +147,16 @@ class Bee():
 		screenSize = game.screen.get_size()
 		if self.state == BeeState.WANDERING or self.state == BeeState.RETURNING or self.state == BeeState.TO_FOOD:
 			if self.position.x < 0:
-				self.position.x = 1
+				self.position.x = 5
 				self.direction.x = -self.direction.x
 			elif self.position.x > screenSize[0]:
-				self.position.x = screenSize[0] - 1
+				self.position.x = screenSize[0] - 5
 				self.direction.x = -self.direction.x
 			if self.position.y < 0:
-				self.position.y = 1
+				self.position.y = 5
 				self.direction.y = -self.direction.y
 			elif self.position.y > screenSize[1]:
-				self.position.y = screenSize[1] - 1
+				self.position.y = screenSize[1] - 5
 				self.direction.y = -self.direction.y
 
 			desiredVelocity = self.direction *  self.maxSpeed
