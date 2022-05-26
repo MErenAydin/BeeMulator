@@ -49,16 +49,18 @@ class Hive():
 			game.screen.blit(text, (self.position.x - text_rect.width / 2, self.position.y - text_rect.height / 2))
 			for bee in self.bees:
 				bee.Render(game)
+		
+		elif game.selectedHive == self:
 
-		elif game.state == DisplayState.DISPLAY_HIVE:
-			for comb in self.combs:
-				comb.Render(game)
+			if game.state == DisplayState.DISPLAY_HIVE:
+				for comb in self.combs:
+					comb.Render(game)
 
-		elif game.state == DisplayState.DISPLAY_COMB:
-			self.selectedComb.Render(game)
+			elif game.state == DisplayState.DISPLAY_COMB:
+				self.selectedComb.Render(game)
 
-		elif game.state == DisplayState.DISPLAY_CELL:
-		 	self.selectedComb.selectedCell.Render(game)	
+			elif game.state == DisplayState.DISPLAY_CELL:
+				self.selectedComb.selectedCell.Render(game)	
 
 class Honeycomb():
 	def __init__(self, index):
@@ -243,7 +245,9 @@ class Flower():
 		ret = []
 		for _ in range(amount):
 			randSpecie = random.randint(0,2)
-			randPosition = Vec2(random.randint(0,w), random.randint(0,h))
+			randPosition = Vec2(random.randint(10, w - 10), random.randint(10, h - 10))
+			while any([hive.rect.collidepoint(randPosition.x, randPosition.y) for hive in game.hives]):
+				randPosition = Vec2(random.randint(10, w - 10), random.randint(10, h - 10))
 			ret.append(Flower(randPosition, randSpecie))
 		return ret
 
@@ -294,8 +298,6 @@ class Game():
 		self.buttons.append(self.backButton)
 		self.buttons.append(self.addButton)
 		self.buttons.append(self.removeButton)
-		self.flowers = Flower.RandomlyLocate(self, 100)
-
 
 	def UpdateDisplay(self):
 		if self.drawMode == Game.DRAW_MODE_DEBUG:
@@ -303,7 +305,7 @@ class Game():
 		else:
 			colorScreen = (0,0,0)
 		self.screen.fill(colorScreen)
-
+		
 		if self.hives != None:
 			for hive in self.hives:
 				hive.Render(self)
@@ -361,13 +363,15 @@ class Game():
 								self.selectedHive.combs.append(Honeycomb(len(self.selectedHive.combs)))
 								if len(self.selectedHive.combs) > 1:
 									self.removeButton.visible = True
+								break
 								
 						if self.removeButton.visible and self.removeButton.rect.collidepoint(pos[0], pos[1]):
 							self.addButton.visible = True
 							if len(self.selectedHive.combs) == 2:
 								self.removeButton.visible = False
 							if len(self.selectedHive.combs) > 1:
-									self.selectedHive.combs.pop()
+								self.selectedHive.combs.pop()
+								break
 						if self.backButton.visible and self.backButton.rect.collidepoint(pos[0], pos[1]):
 							self.state = DisplayState.DISPLAY_WORLD
 							self.selectedHive = None
@@ -457,6 +461,7 @@ def main():
 		hive.PopulateHive(game, args["bees"])
 		game.hives.append(hive)
 
+	game.flowers = Flower.RandomlyLocate(game, 100)
 
 	while game.isRunning:
 		game.Update()
