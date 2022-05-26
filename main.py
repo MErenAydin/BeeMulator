@@ -7,8 +7,6 @@ from bee import Bee
 from enums import *
 
 import random
-import math
-import copy
 
 class Hive():
 	def __init__(self, pos):
@@ -154,7 +152,6 @@ class Honeycomb():
 					cell.rect = Rect( 50 + j * diameter + diameter / 2, 50 + i * 0.75 * diameter, diameter, diameter)
 				cell.index = Vec2(j, i)
 				cell.diameter = diameter - 1
-				cell.state = CellType.LARVA_CELL
 				self.cells.append(cell)
 
 class Cell():
@@ -288,9 +285,15 @@ class Game():
 		self.deltaTime = 0
 
 		self.backButton = Button(Rect(100,100, 100,50), "Back")
+		self.addButton = Button(Rect(self.screen.get_size()[0] - 200, 100, 100,50), "Add")
+		self.removeButton = Button(Rect(self.screen.get_size()[0] - 350, 100, 100,50), "Remove")
 		self.backButton.visible = False
+		self.addButton.visible = False
+		self.removeButton.visible = False
 		self.buttons.append(self.backButton)
-		#self.flowers = Flower.RandomlyLocate(self, 100)
+		self.buttons.append(self.addButton)
+		self.buttons.append(self.removeButton)
+		self.flowers = Flower.RandomlyLocate(self, 100)
 
 
 	def UpdateDisplay(self):
@@ -344,20 +347,47 @@ class Game():
 								self.selectedHive = hive
 								self.state = DisplayState.DISPLAY_HIVE
 								self.backButton.visible = True
+								if len(self.selectedHive.combs) > 1:
+									self.removeButton.visible = True
+								if len(self.selectedHive.combs) < 10:
+									self.addButton.visible = True
 					elif self.state == DisplayState.DISPLAY_HIVE:
-						if self.backButton.rect.collidepoint(pos[0], pos[1]):
+						if self.addButton.visible and self.addButton.rect.collidepoint(pos[0], pos[1]):
+							self.addButton.visible = True
+							if len(self.selectedHive.combs) == 9:
+								self.addButton.visible = False
+							if len(self.selectedHive.combs) < 10:
+								self.selectedHive.combs.append(Honeycomb(len(self.selectedHive.combs)))
+								if len(self.selectedHive.combs) > 1:
+									self.removeButton.visible = True
+								
+						if self.removeButton.visible and self.removeButton.rect.collidepoint(pos[0], pos[1]):
+							self.addButton.visible = True
+							if len(self.selectedHive.combs) == 2:
+								self.removeButton.visible = False
+							if len(self.selectedHive.combs) > 1:
+									self.selectedHive.combs.pop()
+						if self.backButton.visible and self.backButton.rect.collidepoint(pos[0], pos[1]):
 							self.state = DisplayState.DISPLAY_WORLD
 							self.selectedHive = None
 							self.backButton.visible = False
+							self.addButton.visible = False
+							self.removeButton.visible = False
 						else:
 							for comb in self.selectedHive.combs:
 								if comb.rect.collidepoint(pos[0], pos[1]):
 									self.selectedHive.selectedComb = comb
 									self.state = DisplayState.DISPLAY_COMB
+									self.addButton.visible = False
+									self.removeButton.visible = False
 					elif self.state == DisplayState.DISPLAY_COMB:
 						if self.backButton.rect.collidepoint(pos[0], pos[1]):
 							self.state = DisplayState.DISPLAY_HIVE
 							self.selectedHive.selectedComb = None
+							if len(self.selectedHive.combs) > 1:
+								self.removeButton.visible = True
+							if len(self.selectedHive.combs) < 10:
+								self.addButton.visible = True
 						else:
 							for cell in self.selectedHive.selectedComb.cells:
 								if cell.rect.collidepoint(pos[0], pos[1]):
