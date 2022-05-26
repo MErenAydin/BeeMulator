@@ -19,10 +19,10 @@ class Vec2():
 	@staticmethod
 	def clamp_magnitude(vector, clamp):
 		mag = vector.magnitude
-		if mag > 0:
+		if mag > clamp and mag > 0:
 			return Vec2(vector.x * clamp / mag, vector.y * clamp / mag)
 		else:
-			return Vec2()
+			return vector
 
 	def __add__(self, other):
 		ret = Vec2()
