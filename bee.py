@@ -176,13 +176,21 @@ class Bee():
 
 	def ClosestFlower(self, game):
 		#flowers = [a for a in game.flowers if a.collectCount > 0]
-		for flower in game.flowers:
-			if flower.collectCount <= 0 or flower in self.collectedFlowers:
-				continue
-			distance2 = (self.position - flower.position).get_magnitude2()
-			if distance2 < self.visionRange * self.visionRange:
-				return flower, distance2
+		distance2, data = game.kdTree.get_nearest((self.position.x,self.position.y))
+		flower = game.flowers[data[2]]
+		if flower.collectCount <= 0 or flower in self.collectedFlowers:
+			return None, None
+		if distance2 < self.visionRange * self.visionRange:
+			return flower, distance2
 		return None, None
+
+		# for flower in game.flowers:
+		# 	if flower.collectCount <= 0 or flower in self.collectedFlowers:
+		# 		continue
+		# 	distance2 = (self.position - flower.position).get_magnitude2()
+		# 	if distance2 < self.visionRange * self.visionRange:
+		# 		return flower, distance2
+		# return None, None
 		
 	def _set_velocity(self, value):
 		self.__velocity = value

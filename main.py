@@ -5,20 +5,19 @@ from pygame.locals import *
 from vector import Vec2
 from collections import deque as queue
 from bee import Bee
+from kdtree import KDTree
 from enums import *
-
 import random
 
 class Hive():
 	def __init__(self, pos):
-		self.position = pos
+		self.position = Vec2()
 		self.rect = Rect(self.position.x - 50, self.position.y - 50, 100, 100)
 		self.bees = None
 		self.honey = 0
 		self.font = pygame.font.SysFont(None, 24)
 		self.knownFood = {}
 		self.combs = []
-
 		self.combs.append(Honeycomb(0))
 		#self.beesInside = 0
 
@@ -162,7 +161,7 @@ class Cell():
 		self.position = Vec2()
 		self.index = Vec2()
 		self.rect = Rect(0,0,0,0)
-		self.capacity = 100
+		self.capacity = 20
 		self.nectar = 0
 		self.__state = CellType.EMPTY_CELL
 		self.color = [75, 45, 20]
@@ -220,6 +219,7 @@ class Flower():
 		self.color[self.specie] = 255
 		self.isPollinated = False
 		self.isDiscovered = True
+		
 
 	def Render(self, game):
 		if self.isDiscovered:
@@ -239,6 +239,7 @@ class Flower():
 			while any([hive.rect.inflate(10, 10).collidepoint(randPosition.x, randPosition.y) for hive in game.hives]):
 				randPosition = self.position + Vec2(random.randint(-50, 50), random.randint(-50, 50))
 			game.flowers.append(Flower(randPosition, self.specie))
+			game.kdTree.add_point((randPosition.x, randPosition.y, len(game.flowers) - 1))
 			self.isPollinated = True
 
 	@staticmethod
@@ -320,7 +321,7 @@ class Game():
 		for button in self.buttons:
 			button.Render(self)
 
-		self.clock.tick()
+		self.clock.tick(50)
 
 		t = pygame.time.get_ticks()
 		oldTime = self.time
@@ -336,7 +337,7 @@ class Game():
 		
 		pygame.display.flip()	
     
-	def Update(self):
+	def UpdateSimulation(self):
 		for event in pygame.event.get():
 			if event.type == pygame.QUIT or (event.type == pygame.KEYUP and event.key == pygame.K_ESCAPE):
 				self.isRunning = False
@@ -417,6 +418,8 @@ class Game():
 			for bee in hive.bees:
 				bee.Update(self)
 
+	def Update(self):
+		self.UpdateSimulation()
 		self.UpdateDisplay()
 
 	def Display_stats(self):
@@ -472,6 +475,8 @@ def main():
 			game.hives.append(hive)
 
 	game.flowers = Flower.RandomlyLocate(game, 100)
+	points = [[flower.position.x, flower.position.y, i] for i,flower in enumerate(game.flowers)] 
+	game.kdTree = KDTree(points, 2)
 
 	while game.isRunning:
 		game.Update()
