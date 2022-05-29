@@ -7,17 +7,19 @@ from collections import deque as queue
 from bee import Bee
 from kdtree import KDTree
 from enums import *
+
 import random
 
 class Hive():
 	def __init__(self, pos):
-		self.position = Vec2()
+		self.position = pos
 		self.rect = Rect(self.position.x - 50, self.position.y - 50, 100, 100)
 		self.bees = None
 		self.honey = 0
 		self.font = pygame.font.SysFont(None, 24)
 		self.knownFood = {}
 		self.combs = []
+
 		self.combs.append(Honeycomb(0))
 		#self.beesInside = 0
 
@@ -205,11 +207,8 @@ class Cell():
 	state = property(lambda self: self.__state, _set_state)
 
 class Flower():
-	SPECIE_RED = 0
-	SPECIE_GREEN = 1
-	SPECIE_BLUE = 2
 
-	def __init__(self, pos, specie = SPECIE_RED):
+	def __init__(self, pos, specie = FlowerSpecies.SPECIE_RED):
 		self.position = pos
 		self.collectCount = 50
 		self.refillTime = 10
