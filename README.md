@@ -8,4 +8,4 @@ BeeMulator is a simulator designed to simulate the life of bees living in man-ma
 * main.py [-b BEES] [-H HIVES]
 
 ## License
-Ovality Detection is licensed under [The MIT License](https://choosealicense.com/licenses/mit/).
+BeeMulator is licensed under [The MIT License](https://choosealicense.com/licenses/mit/).
